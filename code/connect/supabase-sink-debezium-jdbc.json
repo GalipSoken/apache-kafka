@@ -1,0 +1,19 @@
+{
+  "name": "supabase-sink-analitik",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "bank.public.hesap_hareket",
+    "connection.url": "jdbc:postgresql://db.<PROJECT_REF>.supabase.co:5432/postgres?sslmode=require",
+    "connection.username": "${file:/secrets/supabase.properties:sink_user}",
+    "connection.password": "${file:/secrets/supabase.properties:sink_password}",
+    "insert.mode": "upsert",
+    "delete.enabled": "true",
+    "primary.key.mode": "record_key",
+    "schema.evolution": "none",
+    "collection.name.format": "analitik.hesap_hareket_replica",
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "dlq.supabase-sink",
+    "errors.deadletterqueue.context.headers.enable": "true"
+  }
+}

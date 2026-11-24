@@ -1,0 +1,29 @@
+{
+  "name": "supabase-source-bddk",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "db.<PROJECT_REF>.supabase.co",
+    "database.port": "5432",
+    "database.user": "${file:/secrets/supabase.properties:cdc_user}",
+    "database.password": "${file:/secrets/supabase.properties:cdc_password}",
+    "database.dbname": "postgres",
+    "database.sslmode": "require",
+
+    "topic.prefix": "supabase",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_supabase_bddk",
+    "publication.name": "dbz_supabase_pub",
+    "publication.autocreate.mode": "disabled",
+    "schema.include.list": "bddk",
+
+    "snapshot.mode": "initial",
+    "decimal.handling.mode": "precise",
+    "heartbeat.interval.ms": "60000",
+    "heartbeat.action.query": "INSERT INTO cdc_ops.debezium_heartbeat (id, ts) VALUES (1, now()) ON CONFLICT (id) DO UPDATE SET ts = EXCLUDED.ts",
+
+    "topic.creation.default.replication.factor": "3",
+    "topic.creation.default.partitions": "3"
+  }
+}

@@ -1,0 +1,110 @@
+# =============================================================================
+# Production benzeri yerel cluster: 3 dedicated KRaft controller + 3 broker
+# Dosya: code/docker/docker-compose.cluster.yml
+# Amaç : Replication, ISR, leader election ve broker çökmesini yerelde denemek.
+# Not  : Tek makinede çalıştığı için gerçek HA SAĞLAMAZ; sadece öğrenme amaçlıdır.
+# Çalıştırma: docker compose -f code/docker/docker-compose.cluster.yml up -d
+# Host bootstrap: localhost:29092,localhost:39092,localhost:49092
+# =============================================================================
+name: kafka-cluster
+
+x-kafka-common: &kafka-common
+  image: apache/kafka:4.4.0
+  restart: unless-stopped
+
+x-common-env: &common-env
+  CLUSTER_ID: "VEPS6ezoRP-MDTEF3YNXmw"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@controller-1:9093,2@controller-2:9093,3@controller-3:9093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  # Dayanıklılık varsayılanları
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: "false"
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_NUM_PARTITIONS: 6
+
+services:
+  controller-1:
+    <<: *kafka-common
+    hostname: controller-1
+    environment:
+      <<: *common-env
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: controller
+      KAFKA_LISTENERS: CONTROLLER://:9093
+    volumes: [c1:/var/lib/kafka/data]
+
+  controller-2:
+    <<: *kafka-common
+    hostname: controller-2
+    environment:
+      <<: *common-env
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: controller
+      KAFKA_LISTENERS: CONTROLLER://:9093
+    volumes: [c2:/var/lib/kafka/data]
+
+  controller-3:
+    <<: *kafka-common
+    hostname: controller-3
+    environment:
+      <<: *common-env
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: controller
+      KAFKA_LISTENERS: CONTROLLER://:9093
+    volumes: [c3:/var/lib/kafka/data]
+
+  broker-1:
+    <<: *kafka-common
+    hostname: broker-1
+    depends_on: [controller-1, controller-2, controller-3]
+    ports: ["29092:9092"]
+    environment:
+      <<: *common-env
+      KAFKA_NODE_ID: 4
+      KAFKA_PROCESS_ROLES: broker
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker-1:19092,EXTERNAL://localhost:29092
+    volumes: [b1:/var/lib/kafka/data]
+
+  broker-2:
+    <<: *kafka-common
+    hostname: broker-2
+    depends_on: [controller-1, controller-2, controller-3]
+    ports: ["39092:9092"]
+    environment:
+      <<: *common-env
+      KAFKA_NODE_ID: 5
+      KAFKA_PROCESS_ROLES: broker
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker-2:19092,EXTERNAL://localhost:39092
+    volumes: [b2:/var/lib/kafka/data]
+
+  broker-3:
+    <<: *kafka-common
+    hostname: broker-3
+    depends_on: [controller-1, controller-2, controller-3]
+    ports: ["49092:9092"]
+    environment:
+      <<: *common-env
+      KAFKA_NODE_ID: 6
+      KAFKA_PROCESS_ROLES: broker
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://broker-3:19092,EXTERNAL://localhost:49092
+    volumes: [b3:/var/lib/kafka/data]
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    depends_on: [broker-1, broker-2, broker-3]
+    ports: ["8080:8080"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: broker-1:19092,broker-2:19092,broker-3:19092
+
+volumes: {c1: {}, c2: {}, c3: {}, b1: {}, b2: {}, b3: {}}

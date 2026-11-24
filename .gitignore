@@ -1,0 +1,18 @@
+# Secrets (SADECE .example dosyaları git'e girer)
+code/connect/secrets/*
+!code/connect/secrets/*.example
+# db.properties sadece yerel dev laboratuvarının sahte şifrelerini içerir
+!code/connect/secrets/db.properties
+*.p12
+*.jks
+*.key
+.env
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+*.pyc
+# Çıktılar
+code/python/cikti/
+code/monitoring/jmx/*.jar
+code/streams/kafka-streams-java/target/

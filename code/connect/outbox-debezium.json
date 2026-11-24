@@ -1,0 +1,26 @@
+{
+  "name": "pg-outbox-odeme",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "pg-source",
+    "database.port": "5432",
+    "database.user": "${file:/secrets/db.properties:source_user}",
+    "database.password": "${file:/secrets/db.properties:source_password}",
+    "database.dbname": "bankdb",
+    "topic.prefix": "bankoutbox",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_outbox",
+    "publication.name": "dbz_outbox_pub",
+    "publication.autocreate.mode": "disabled",
+    "table.include.list": "public.outbox",
+    "tombstones.on.delete": "false",
+    "transforms": "outbox",
+    "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.outbox.table.field.event.key": "aggregateid",
+    "transforms.outbox.table.fields.additional.placement": "type:header:eventType",
+    "transforms.outbox.route.by.field": "aggregatetype",
+    "transforms.outbox.route.topic.replacement": "outbox.event.${routedByValue}",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}

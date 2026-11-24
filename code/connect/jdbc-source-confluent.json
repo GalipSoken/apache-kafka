@@ -1,0 +1,18 @@
+{
+  "name": "jdbc-source-musteri-polling",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "tasks.max": "1",
+    "connection.url": "jdbc:postgresql://pg-source:5432/bankdb",
+    "connection.user": "${file:/secrets/db.properties:target_user}",
+    "connection.password": "${file:/secrets/db.properties:target_password}",
+    "mode": "timestamp+incrementing",
+    "timestamp.column.name": "guncellendi",
+    "incrementing.column.name": "musteri_id",
+    "table.whitelist": "musteri",
+    "topic.prefix": "poll.",
+    "poll.interval.ms": "10000",
+    "numeric.mapping": "best_fit",
+    "db.timezone": "UTC"
+  }
+}

@@ -1,0 +1,69 @@
+# =============================================================================
+# Streaming SQL laboratuvarı: ksqlDB + Flink SQL
+# Dosya: code/docker/docker-compose.streaming.yml
+# Ön koşul: code/docker/docker-compose.yml (kafka-dev) ayakta olmalı; bu dosya onun ağına katılır.
+# Çalıştırma:
+#   docker compose -f code/docker/docker-compose.yml up -d
+#   docker compose -f code/docker/docker-compose.streaming.yml up -d --build
+#   ksqlDB CLI : docker exec -it ksqldb-cli ksql http://ksqldb-server:8088
+#   Flink SQL  : docker exec -it flink-jobmanager ./bin/sql-client.sh
+#   Flink UI   : http://localhost:8081
+# Sürümler: confluentinc/cp-ksqldb-server:8.2.0, Apache Flink 2.3.0 (+ Kafka SQL connector jar)
+# =============================================================================
+name: kafka-streaming
+
+networks:
+  default:
+    name: kafka-dev_default
+    external: true
+
+services:
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:8.2.0
+    container_name: ksqldb-server
+    hostname: ksqldb-server
+    ports: ["8088:8088"]
+    environment:
+      KSQL_LISTENERS: http://0.0.0.0:8088
+      KSQL_BOOTSTRAP_SERVERS: kafka:19092
+      KSQL_KSQL_SERVICE_ID: rehber_ksql_
+      KSQL_KSQL_INTERNAL_TOPIC_REPLICAS: 1
+      KSQL_KSQL_STREAMS_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+      KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: "true"
+      KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
+      KSQL_KSQL_STREAMS_AUTO_OFFSET_RESET: earliest
+
+  ksqldb-cli:
+    image: confluentinc/cp-ksqldb-cli:8.2.0
+    container_name: ksqldb-cli
+    depends_on: [ksqldb-server]
+    entrypoint: /bin/sh
+    tty: true
+    volumes:
+      - ../ksqldb:/ksqldb:ro
+
+  flink-jobmanager:
+    build:
+      context: ../flink
+    container_name: flink-jobmanager
+    ports: ["8081:8081"]
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        execution.checkpointing.interval: 30s
+        state.backend.type: rocksdb
+        execution.checkpointing.dir: file:///tmp/flink-checkpoints
+    volumes:
+      - ../flink:/opt/flink/rehber:ro
+
+  flink-taskmanager:
+    build:
+      context: ../flink
+    depends_on: [flink-jobmanager]
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4

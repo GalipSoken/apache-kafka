@@ -1,0 +1,35 @@
+# =============================================================================
+# Monitoring: JMX Exporter (broker içinde) + kafka-exporter (lag) + Prometheus + Grafana
+# Dosya: code/docker/docker-compose.monitoring.yml
+# Ön koşul: jmx_prometheus_javaagent jar'ını indirin:
+#   mkdir -p code/monitoring/jmx && curl -L -o code/monitoring/jmx/jmx_prometheus_javaagent.jar \
+#     https://github.com/prometheus/jmx_exporter/releases/download/1.5.0/jmx_prometheus_javaagent-1.5.0.jar
+#   (sürümü GitHub releases sayfasından doğrulayın)
+# Çalıştırma: docker compose -f code/docker/docker-compose.yml -f code/docker/docker-compose.monitoring.yml up -d
+# Grafana: http://localhost:3000 (admin/admin) -> Prometheus datasource: http://prometheus:9090
+# =============================================================================
+services:
+  kafka:                       # docker-compose.yml'deki kafka servisine EK ayar (override)
+    environment:
+      KAFKA_OPTS: "-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=7071:/opt/jmx/jmx-kafka.yml"
+    volumes:
+      - ../monitoring/jmx/jmx_prometheus_javaagent.jar:/opt/jmx/jmx_prometheus_javaagent.jar:ro
+      - ../monitoring/jmx-kafka.yml:/opt/jmx/jmx-kafka.yml:ro
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    command: ["--kafka.server=kafka:19092"]
+    ports: ["9308:9308"]
+    depends_on: [kafka]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports: ["9090:9090"]
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    ports: ["3000:3000"]
+    depends_on: [prometheus]

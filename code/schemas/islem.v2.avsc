@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "Islem",
+  "namespace": "tr.banka.odeme",
+  "doc": "v2: geriye uyumlu (BACKWARD) değişiklik — varsayılanı olan yeni alan eklendi",
+  "fields": [
+    {"name": "hareket_id",  "type": "long"},
+    {"name": "musteri_id",  "type": "long"},
+    {"name": "islem_tipi",  "type": {"type": "enum", "name": "IslemTipi",
+                                      "symbols": ["EFT", "HAVALE", "KART", "ATM", "FAST", "BILINMIYOR"],
+                                      "default": "BILINMIYOR"}},
+    {"name": "tutar",       "type": {"type": "bytes", "logicalType": "decimal", "precision": 18, "scale": 2}},
+    {"name": "para_birimi", "type": "string", "default": "TRY"},
+    {"name": "islem_zamani","type": {"type": "long", "logicalType": "timestamp-micros"}},
+    {"name": "kanal",       "type": ["null", "string"], "default": null},
+    {"name": "sube_kodu",   "type": ["null", "string"], "default": null}
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "pg-source-bank",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "pg-source",
+    "database.port": "5432",
+    "database.user": "${file:/secrets/db.properties:source_user}",
+    "database.password": "${file:/secrets/db.properties:source_password}",
+    "database.dbname": "bankdb",
+
+    "topic.prefix": "bank",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_bank",
+    "publication.name": "dbz_bank_pub",
+    "publication.autocreate.mode": "disabled",
+    "table.include.list": "public.musteri,public.hesap_hareket",
+
+    "snapshot.mode": "initial",
+    "decimal.handling.mode": "precise",
+    "time.precision.mode": "adaptive_time_microseconds",
+    "tombstones.on.delete": "true",
+
+    "heartbeat.interval.ms": "10000",
+    "heartbeat.action.query": "SELECT 1",
+
+    "topic.creation.default.replication.factor": "1",
+    "topic.creation.default.partitions": "3",
+    "topic.creation.default.cleanup.policy": "compact,delete",
+    "topic.creation.default.retention.ms": "604800000",
+
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "false"
+  }
+}

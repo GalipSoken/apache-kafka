@@ -1,0 +1,149 @@
+# =============================================================================
+# Uçtan uca CDC laboratuvarı
+#   PostgreSQL (kaynak) --WAL/pgoutput--> Debezium (Kafka Connect) --> Kafka
+#   Kafka --> Debezium JDBC Sink (Kafka Connect) --> PostgreSQL (hedef)
+# Dosya: code/docker/docker-compose.cdc.yml
+# Çalıştırma (repo kökünden):
+#   docker compose -f code/docker/docker-compose.cdc.yml up -d
+#   bash code/scripts/register_connectors.sh
+#
+# Sürümler:
+#   apache/kafka:4.4.0
+#   quay.io/debezium/connect:3.7.1.Final   (Debezium image'ları Docker Hub'da artık güncellenmiyor)
+#   postgres:17
+#   confluentinc/cp-schema-registry:8.2.0  (Avro/Schema Registry bölümü için; opsiyonel)
+#   ghcr.io/kafbat/kafka-ui:v1.5.0
+# =============================================================================
+name: kafka-cdc
+
+services:
+  kafka:
+    image: apache/kafka:4.4.0
+    hostname: kafka
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: "imisJNB_QCSTEWiR9LQnjQ"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"   # Debezium topic'leri otomatik açabilsin (prod'da topic.creation.* kullanın)
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes: [kafka-data:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:19092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  pg-source:
+    image: postgres:17
+    hostname: pg-source
+    ports: ["5433:5432"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bankdb
+    # Logical replication için wal_level=logical ZORUNLU
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_slot_wal_keep_size=2GB      # Slot yüzünden WAL'ın diski doldurmasına üst sınır
+    volumes:
+      - ../sql/source_init.sql:/docker-entrypoint-initdb.d/01_source_init.sql:ro
+      - pg-source-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bankdb"]
+      interval: 5s
+      retries: 20
+
+  pg-target:
+    image: postgres:17
+    hostname: pg-target
+    ports: ["5434:5432"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dwh
+    volumes:
+      - ../sql/target_init.sql:/docker-entrypoint-initdb.d/01_target_init.sql:ro
+      - pg-target-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dwh"]
+      interval: 5s
+      retries: 20
+
+  connect:
+    image: quay.io/debezium/connect:3.7.1.Final
+    hostname: connect
+    depends_on:
+      kafka: {condition: service_healthy}
+      pg-source: {condition: service_healthy}
+      pg-target: {condition: service_healthy}
+    ports: ["8083:8083"]
+    environment:
+      BOOTSTRAP_SERVERS: kafka:19092
+      GROUP_ID: connect-cluster-1
+      CONFIG_STORAGE_TOPIC: _connect-configs
+      OFFSET_STORAGE_TOPIC: _connect-offsets
+      STATUS_STORAGE_TOPIC: _connect-status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
+      # Secret'ları connector JSON'una düz yazmamak için FileConfigProvider
+      CONNECT_CONFIG_PROVIDERS: file
+      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: org.apache.kafka.common.config.provider.FileConfigProvider
+    volumes:
+      - ../connect/secrets:/secrets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8083/ > /dev/null"]
+      interval: 10s
+      retries: 30
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.0
+    hostname: schema-registry
+    profiles: ["avro"]               # sadece `--profile avro` ile başlar
+    depends_on:
+      kafka: {condition: service_healthy}
+    ports: ["8081:8081"]
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:19092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    depends_on:
+      kafka: {condition: service_healthy}
+    ports: ["8080:8080"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: cdc-lab
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+
+volumes:
+  kafka-data: {}
+  pg-source-data: {}
+  pg-target-data: {}

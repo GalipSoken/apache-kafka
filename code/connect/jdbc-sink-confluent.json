@@ -1,0 +1,22 @@
+{
+  "name": "jdbc-sink-confluent-musteri",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "bank.public.musteri",
+    "connection.url": "jdbc:postgresql://pg-target:5432/dwh",
+    "connection.user": "${file:/secrets/db.properties:target_user}",
+    "connection.password": "${file:/secrets/db.properties:target_password}",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "table.name.format": "musteri_replica_confluent",
+    "insert.mode": "upsert",
+    "pk.mode": "record_key",
+    "pk.fields": "musteri_id",
+    "delete.enabled": "true",
+    "auto.create": "true",
+    "auto.evolve": "false",
+    "transforms.unwrap.delete.tombstone.handling.mode": "tombstone"
+  }
+}
